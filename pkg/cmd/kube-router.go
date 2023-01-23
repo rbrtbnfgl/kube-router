@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cloudnativelabs/kube-router/v2/pkg/controllers/lballoc"
 	"github.com/cloudnativelabs/kube-router/v2/pkg/controllers/netpol"
 	"github.com/cloudnativelabs/kube-router/v2/pkg/controllers/proxy"
 	"github.com/cloudnativelabs/kube-router/v2/pkg/controllers/routing"

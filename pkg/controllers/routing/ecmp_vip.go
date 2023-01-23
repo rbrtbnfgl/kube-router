@@ -13,6 +13,8 @@ import (
 	"github.com/cloudnativelabs/kube-router/v2/pkg/metrics"
 	"github.com/cloudnativelabs/kube-router/v2/pkg/utils"
 
+	"strings"
+
 	gobgpapi "github.com/osrg/gobgp/v3/api"
 	v1core "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
