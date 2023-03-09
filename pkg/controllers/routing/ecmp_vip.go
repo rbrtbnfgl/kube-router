@@ -517,12 +517,10 @@ func (nrc *NetworkRoutingController) getAllVIPsForService(svc *v1core.Service) (
 	advertisedIPList := make([]string, 0)
 	unAdvertisedIPList := make([]string, 0)
 
-	clusterIPs := nrc.getClusterIP(svc)
-	if len(clusterIPs) > 0 {
-		if nrc.shouldAdvertiseService(svc, svcAdvertiseClusterAnnotation, nrc.advertiseClusterIP) {
-			advertisedIPList = append(advertisedIPList, clusterIPs...)
-		} else {
-			unAdvertisedIPList = append(unAdvertisedIPList, clusterIPs...)
+	if nrc.shouldAdvertiseService(svc, svcAdvertiseClusterAnnotation, nrc.advertiseClusterIP) {
+		clusterIPs := nrc.getClusterIP(svc)
+		if len(clusterIPs) > 0 {
+			ipList = append(ipList, clusterIPs...)
 		}
 	}
 
