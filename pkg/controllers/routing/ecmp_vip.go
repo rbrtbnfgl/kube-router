@@ -13,8 +13,6 @@ import (
 	"github.com/cloudnativelabs/kube-router/v2/pkg/metrics"
 	"github.com/cloudnativelabs/kube-router/v2/pkg/utils"
 
-	"strings"
-
 	gobgpapi "github.com/osrg/gobgp/v3/api"
 	v1core "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -177,9 +175,7 @@ func (nrc *NetworkRoutingController) handleServiceDelete(oldSvc *v1core.Service)
 		klog.Errorf("Failed to get active VIP's on service delete event due to: %s", err.Error())
 		return
 	}
-	advertiseIPList, unadvertiseIPList := nrc.getAllVIPsForService(oldSvc)
-	//nolint:gocritic // we understand that we're assigning to a new slice
-	allIPList := append(advertiseIPList, unadvertiseIPList...)
+	serviceVIPs := nrc.getAllVIPsForService(oldSvc)
 	withdrawVIPs := make([]string, 0)
 	for _, serviceVIP := range allIPList {
 		// withdraw VIP only if deleted service is the last service using the VIP
@@ -368,6 +364,7 @@ func (nrc *NetworkRoutingController) getLoadBalancerIPs(svc *v1core.Service) []s
 
 func (nrc *NetworkRoutingController) getChangedVIPs(oldSvc, newSvc *v1core.Service,
 	onlyActiveEndpoints bool) ([]string, []string, error) {
+	toWithdrawList := make([]string, 0)
 	advertiseService := false
 
 	_, hasLocalAnnotation := newSvc.Annotations[svcLocalAnnotation]
@@ -382,53 +379,48 @@ func (nrc *NetworkRoutingController) getChangedVIPs(oldSvc, newSvc *v1core.Servi
 		}
 	}
 
-	newAdvertiseServiceVIPs, newUnadvertiseServiceVIPs := nrc.getAllVIPsForService(newSvc)
+	newServiceVIPs := nrc.getAllVIPsForService(newSvc)
 	// This function allows oldSvc to be nil, if this is the case, we don't have any old VIPs to compare against and
 	// possibly withdraw instead treat all VIPs as new and return them as either toAdvertise or toWithdraw depending
 	// on service configuration
 	if oldSvc == nil {
 		if advertiseService {
-			return newAdvertiseServiceVIPs, newUnadvertiseServiceVIPs, nil
+			return newServiceVIPs, nil, nil
 		} else {
-			//nolint:gocritic // we understand that we're assigning to a new slice
-			allVIPs := append(newAdvertiseServiceVIPs, newUnadvertiseServiceVIPs...)
-			return nil, allVIPs, nil
+			return nil, newServiceVIPs, nil
 		}
 	}
-	oldAdvertiseServiceVIPs, oldUnadvertiseServiceVIPs := nrc.getAllVIPsForService(oldSvc)
-	//nolint:gocritic // we understand that we're assigning to a new slice
-	oldAllServiceVIPs := append(oldAdvertiseServiceVIPs, oldUnadvertiseServiceVIPs...)
+	oldServiceVIPs := nrc.getAllVIPsForService(oldSvc)
 
 	// If we are instructed to only advertise local services and this service doesn't have endpoints on the node we are
 	// currently running on, then attempt to withdraw all the VIPs that the old service had.
 	if !advertiseService {
-		return nil, oldAllServiceVIPs, nil
+		return nil, oldServiceVIPs, nil
 	}
 
 	// At this point we're sure that we should be advertising some VIPs, but we need to figure out which VIPs to
 	// advertise and which, if any to withdraw.
-	toAdvertiseListFinal := newAdvertiseServiceVIPs
-	toWithdrawList := newUnadvertiseServiceVIPs
-	for _, oldServiceVIP := range oldAllServiceVIPs {
-		if !utils.SliceContainsString(oldServiceVIP, toAdvertiseListFinal) {
+	toAdvertiseList := newServiceVIPs
+	for _, oldServiceVIP := range oldServiceVIPs {
+		if !utils.SliceContainsString(oldServiceVIP, toAdvertiseList) {
 			toWithdrawList = append(toWithdrawList, oldServiceVIP)
 		}
 	}
 
 	// It is possible that this host may have the same IP advertised from multiple services, and we don't want to
 	// withdraw it if there is an active service for this VIP on a different service than the one that is changing.
-	toWithdrawListFinal := make([]string, 0)
+	finalToWithdrawList := make([]string, 0)
 	allVIPsOnServer, _, err := nrc.getVIPs(onlyActiveEndpoints)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, withdrawVIP := range toWithdrawList {
 		if !utils.SliceContainsString(withdrawVIP, allVIPsOnServer) {
-			toWithdrawListFinal = append(toWithdrawListFinal, withdrawVIP)
+			finalToWithdrawList = append(finalToWithdrawList, withdrawVIP)
 		}
 	}
 
-	return toAdvertiseListFinal, toWithdrawListFinal, nil
+	return toAdvertiseList, finalToWithdrawList, nil
 }
 
 func (nrc *NetworkRoutingController) getAllVIPs() ([]string, []string, error) {
