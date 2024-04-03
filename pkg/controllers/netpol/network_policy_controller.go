@@ -496,6 +496,32 @@ func (npc *NetworkPolicyController) ensureTopLevelChains() {
 		ensureRuleAtPosition(handler,
 			kubeInputChainName, whitelistUDPNodeports, uuid, rulePosition[family])
 		rulePosition[family]++
+
+		if family == v1core.IPv6Protocol {
+			whitelistMulticastIPv6Input := []string{"-m", "comment", "--comment",
+				"allow IPv6 multicast traffic", "-d", "ff00::/8",
+				"-j", "RETURN"}
+			uuid, err = addUUIDForRuleSpec(kubeInputChainName, &whitelistMulticastIPv6Input)
+			if err != nil {
+				klog.Fatalf("Failed to get uuid for rule: %s", err.Error())
+			}
+			klog.V(2).Infof("Allow multicast input IPv6 traffic")
+			ensureRuleAtPosition(handler,
+				kubeInputChainName, whitelistMulticastIPv6Input, uuid, rulePosition[family])
+			rulePosition[family]++
+			whitelistMulticastIPv6Output := []string{"-m", "comment", "--comment",
+				"allow IPv6 multicast traffic", "-d", "ff00::/8",
+				"-j", "RETURN"}
+			uuid, err = addUUIDForRuleSpec(kubeInputChainName, &whitelistMulticastIPv6Output)
+			if err != nil {
+				klog.Fatalf("Failed to get uuid for rule: %s", err.Error())
+			}
+			klog.V(2).Infof("Allow multicast output IPv6 traffic")
+			ensureRuleAtPosition(handler,
+				kubeOutputChainName, whitelistMulticastIPv6Output, uuid, rulePosition[family])
+			rulePosition[family]++
+		}
+
 	}
 
 	for idx, externalIPRange := range npc.serviceExternalIPRanges {
